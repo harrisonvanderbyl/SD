@@ -1,3 +1,9 @@
+# DECENTRALISED DISCORD BOT, KINDA BROKEN, DOES WORK
+
+Combine with https://github.com/harrisonvanderbyl/ravenbot-ai
+
+Pull requests appreciated.
+
 # UPDATE
 
 The code can now use mixed precision to generate _512x512 images under 25 seconds per image while using less than 4Gb VRAM (Tested on RTX 2060 which has tensor cores). And with 6Gb VRAM, it can generate upto 640x704 images._ Thanks to @xraxra for the suggestion
