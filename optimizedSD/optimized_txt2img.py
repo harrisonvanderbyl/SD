@@ -32,7 +32,6 @@ def load_model_from_config(ckpt, verbose=False):
     sd = pl_sd["state_dict"]
     return sd
 
-
 config = "optimizedSD/v1-inference.yaml"
 ckpt = "models/ldm/stable-diffusion-v1/model.ckpt"
 device = "cuda"
@@ -152,6 +151,12 @@ parser.add_argument(
     choices=["full", "autocast"],
     default="autocast"
 )
+parser.add_argument(
+    "--url",
+    type=str,
+    help="url of associated writerbot instance",
+    default="http://localhost:8080"
+)
 opt = parser.parse_args()
 
 tic = time.time()
@@ -217,7 +222,7 @@ while True:
     found = False
     prdata = {}
     while not found:
-        sdlist = http.request("GET","https://writerbot.selkiemyth.com/sdlist") 
+        sdlist = http.request("GET","/sdlist") 
         prdata = json.loads(sdlist.data.decode("utf-8"))
         print(prdata)
         print(sdlist.data.decode("utf-8"))
@@ -241,13 +246,13 @@ while True:
     seed_everything(int(prdata["seed"]))
 
     def updateText(i):
-        req = http.request("POST", "https://writerbot.selkiemyth.com/update/"+pid, body="seed:"+ prdata["seed"]+"\nProgress:"+str(i)+"/50", headers=headers)
+        req = http.request("POST", opt.url+"/update/"+pid, body="seed:"+ prdata["seed"]+"\nProgress:"+str(i)+"/50", headers=headers)
    
 
     start_code = torch.randn([opt.n_samples, opt.C, opt.H // opt.f, opt.W // opt.f], device=device)
 
     headers = {'content-type': 'text/plain'}
-    req = http.request("POST", "https://writerbot.selkiemyth.com/update/"+pid, body="starting with seed "+ prdata["seed"], headers=headers)
+    req = http.request("POST", opt.url+"/update/"+pid, body="starting with seed "+ prdata["seed"], headers=headers)
     if not opt.from_file:
         prompt = opt.prompt
         assert prompt is not None
@@ -306,7 +311,7 @@ while True:
                         image = Image.fromarray(x_sample.astype(np.uint8))
                         # send image using post request as base64
                         temp = BytesIO()
-                        url = "https://writerbot.selkiemyth.com/upload/"+pid
+                        url = opt.url+"/upload/"+pid
                         
                         image.save(temp,"jpeg")
                         encoded = base64.b64encode(temp.getvalue()).decode('utf-8')
