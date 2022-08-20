@@ -1,4 +1,5 @@
 import argparse, os, sys, glob, random
+from io import BytesIO
 import torch
 import numpy as np
 import copy
@@ -13,6 +14,9 @@ from pytorch_lightning import seed_everything
 from torch import autocast
 from contextlib import contextmanager, nullcontext
 from ldm.util import instantiate_from_config
+import base64
+import urllib3, json 
+http = urllib3.PoolManager()
 
 
 def chunk(it, size):
@@ -62,7 +66,7 @@ parser.add_argument(
 parser.add_argument(
     "--ddim_steps",
     type=int,
-    default=50,
+    default=20,
     help="number of ddim sampling steps",
 )
 
@@ -110,7 +114,7 @@ parser.add_argument(
 parser.add_argument(
     "--n_samples",
     type=int,
-    default=5,
+    default=1,
     help="how many samples to produce for each given prompt. A.k.a. batch size",
 )
 parser.add_argument(
@@ -180,7 +184,6 @@ for key in lo:
     sd['model2.' + key[6:]] = sd.pop(key)
 
 config = OmegaConf.load(f"{config}")
-config.modelUNet.params.ddim_steps = opt.ddim_steps
 
 if opt.small_batch:
     config.modelUNet.params.small_batch = True
@@ -205,90 +208,134 @@ if opt.precision == "autocast":
     model.half()
     modelCS.half()
 
-start_code = None
-if opt.fixed_code:
-    start_code = torch.randn([opt.n_samples, opt.C, opt.H // opt.f, opt.W // opt.f], device=device)
 
 
 batch_size = opt.n_samples
 n_rows = opt.n_rows if opt.n_rows > 0 else batch_size
-if not opt.from_file:
-    prompt = opt.prompt
-    assert prompt is not None
-    data = [batch_size * [prompt]]
 
-else:
-    print(f"reading prompts from {opt.from_file}")
-    with open(opt.from_file, "r") as f:
-        data = f.read().splitlines()
-        data = list(chunk(data, batch_size))
-
-
-precision_scope = autocast if opt.precision=="autocast" else nullcontext
-with torch.no_grad():
-
-    all_samples = list()
-    for n in trange(opt.n_iter, desc="Sampling"):
-        for prompts in tqdm(data, desc="data"):
-             with precision_scope("cuda"):
-                modelCS.to(device)
-                uc = None
-                if opt.scale != 1.0:
-                    uc = modelCS.get_learned_conditioning(batch_size * [""])
-                if isinstance(prompts, tuple):
-                    prompts = list(prompts)
-                
-                c = modelCS.get_learned_conditioning(prompts)
-                shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
-                mem = torch.cuda.memory_allocated()/1e6
-                modelCS.to("cpu")
-                while(torch.cuda.memory_allocated()/1e6 >= mem):
-                    time.sleep(1)
+while True:
+    found = False
+    prdata = {}
+    while not found:
+        sdlist = http.request("GET","https://writerbot.selkiemyth.com/sdlist") 
+        prdata = json.loads(sdlist.data.decode("utf-8"))
+        print(prdata)
+        print(sdlist.data.decode("utf-8"))
+        if(not "prompt" in prdata):
+            print("No prompt specified. Using default prompt: a painting of a virus monster playing guitar")
+            #wait 1 second to avoid overloading the server
+            time.sleep(1)
+        else:
+            print(f"Using prompt:"+prdata["prompt"])
+            found = True
 
 
-                samples_ddim = model.sample(S=opt.ddim_steps,
-                                conditioning=c,
-                                batch_size=opt.n_samples,
-                                shape=shape,
-                                verbose=False,
-                                unconditional_guidance_scale=opt.scale,
-                                unconditional_conditioning=uc,
-                                eta=opt.ddim_eta,
-                                x_T=start_code)
+    opt.prompt = prdata["prompt"]
+    pid = prdata["id"]
+    if(float(prdata["seed"])<1.0):
+        prdata["seed"] = prdata["seed"].replace(".","")
+        
+    opt.ddim_steps = int(prdata["samples"])
+    config.modelUNet.params.ddim_steps = opt.ddim_steps
 
-                modelFS.to(device)
-                print("saving images")
-                for i in range(batch_size):
+    seed_everything(int(prdata["seed"]))
+
+    def updateText(i):
+        req = http.request("POST", "https://writerbot.selkiemyth.com/update/"+pid, body="seed:"+ prdata["seed"]+"\nProgress:"+str(i)+"/50", headers=headers)
+   
+
+    start_code = torch.randn([opt.n_samples, opt.C, opt.H // opt.f, opt.W // opt.f], device=device)
+
+    headers = {'content-type': 'text/plain'}
+    req = http.request("POST", "https://writerbot.selkiemyth.com/update/"+pid, body="starting with seed "+ prdata["seed"], headers=headers)
+    if not opt.from_file:
+        prompt = opt.prompt
+        assert prompt is not None
+        data = [batch_size * [prompt]]
+
+    else:
+        print(f"reading prompts from {opt.from_file}")
+        with open(opt.from_file, "r") as f:
+            data = f.read().splitlines()
+            data = list(chunk(data, batch_size))
+
+    precision_scope = autocast if opt.precision=="autocast" else nullcontext
+    with torch.no_grad():
+
+        all_samples = list()
+        # download prompt
+        
+        for n in trange(opt.n_iter, desc="Sampling"):
+            for prompts in tqdm(data, desc="data"):
+                with precision_scope("cuda"):
+                    modelCS.to(device)
+                    uc = None
+                    if opt.scale != 1.0:
+                        uc = modelCS.get_learned_conditioning(batch_size * [""])
+                    if isinstance(prompts, tuple):
+                        prompts = list(prompts)
                     
-                    x_samples_ddim = modelFS.decode_first_stage(samples_ddim[i].unsqueeze(0))
-                    x_sample = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
-                # for x_sample in x_samples_ddim:
-                    x_sample = 255. * rearrange(x_sample[0].cpu().numpy(), 'c h w -> h w c')
-                    Image.fromarray(x_sample.astype(np.uint8)).save(
-                        os.path.join(sample_path, f"{base_count:05}.png"))
-                    base_count += 1
+                    c = modelCS.get_learned_conditioning(prompts)
+                    shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
+                    mem = torch.cuda.memory_allocated()/1e6
+                    modelCS.to("cpu")
+                    while(torch.cuda.memory_allocated()/1e6 >= mem):
+                        time.sleep(1)
 
 
-                mem = torch.cuda.memory_allocated()/1e6
-                modelFS.to("cpu")
-                while(torch.cuda.memory_allocated()/1e6 >= mem):
-                    time.sleep(1)
+                    samples_ddim = model.sample(S=opt.ddim_steps,
+                                    conditioning=c,
+                                    batch_size=opt.n_samples,
+                                    shape=shape,
+                                    verbose=False,
+                                    unconditional_guidance_scale=opt.scale,
+                                    unconditional_conditioning=uc,
+                                    eta=opt.ddim_eta,
+                                    x_T=start_code,
+                                    callback=updateText
+                                    )
 
-                # if not opt.skip_grid:
-                #     all_samples.append(x_samples_ddim)
-                del samples_ddim
-                print("memory_final = ", torch.cuda.memory_allocated()/1e6)
+                    modelFS.to(device)
+                    print("saving images")
+                    for i in range(batch_size):
+                        
+                        x_samples_ddim = modelFS.decode_first_stage(samples_ddim[i].unsqueeze(0))
+                        x_sample = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
+                    # for x_sample in x_samples_ddim:
+                        x_sample = 255. * rearrange(x_sample[0].cpu().numpy(), 'c h w -> h w c')
+                        image = Image.fromarray(x_sample.astype(np.uint8))
+                        # send image using post request as base64
+                        temp = BytesIO()
+                        url = "https://writerbot.selkiemyth.com/upload/"+pid
+                        
+                        image.save(temp,"jpeg")
+                        encoded = base64.b64encode(temp.getvalue()).decode('utf-8')
+                    
+                        headers = {'content-type': 'text/plain'}
+                        req = http.request("POST", url, body=encoded, headers=headers)
+                        base_count += 1
 
-        # if not skip_grid:
-        #     # additionally, save as grid
-        #     grid = torch.stack(all_samples, 0)
-        #     grid = rearrange(grid, 'n b c h w -> (n b) c h w')
-        #     grid = make_grid(grid, nrow=n_rows)
 
-        #     # to image
-        #     grid = 255. * rearrange(grid, 'c h w -> h w c').cpu().numpy()
-        #     Image.fromarray(grid.astype(np.uint8)).save(os.path.join(outpath, f'grid-{grid_count:04}.png'))
-        #     grid_count += 1
+                    mem = torch.cuda.memory_allocated()/1e6
+                    modelFS.to("cpu")
+                    while(torch.cuda.memory_allocated()/1e6 >= mem):
+                        time.sleep(1)
+
+                    # if not opt.skip_grid:
+                    #     all_samples.append(x_samples_ddim)
+                    del samples_ddim
+                    print("memory_final = ", torch.cuda.memory_allocated()/1e6)
+
+            # if not skip_grid:
+            #     # additionally, save as grid
+            #     grid = torch.stack(all_samples, 0)
+            #     grid = rearrange(grid, 'n b c h w -> (n b) c h w')
+            #     grid = make_grid(grid, nrow=n_rows)
+
+            #     # to image
+            #     grid = 255. * rearrange(grid, 'c h w -> h w c').cpu().numpy()
+            #     Image.fromarray(grid.astype(np.uint8)).save(os.path.join(outpath, f'grid-{grid_count:04}.png'))
+            #     grid_count += 1
 
 toc = time.time()
 
