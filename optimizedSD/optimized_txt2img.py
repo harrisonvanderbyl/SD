@@ -222,7 +222,7 @@ while True:
     found = False
     prdata = {}
     while not found:
-        sdlist = http.request("GET","/sdlist") 
+        sdlist = http.request("GET",opt.url+"/sdlist") 
         prdata = json.loads(sdlist.data.decode("utf-8"))
         print(prdata)
         print(sdlist.data.decode("utf-8"))
