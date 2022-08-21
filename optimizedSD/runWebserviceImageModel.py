@@ -67,6 +67,7 @@ def parseModelOptionsFromServerResponse(serverResponse: dict) -> ModelArguments:
     ))
 
 while True:
+    print("atarting listen")
     fetchedNewPromptFromServer = False
     while not fetchedNewPromptFromServer:
         serverData = makeHttpRequest("GET",f"{initialModelOptions.url}/sdlist")
@@ -106,3 +107,4 @@ while True:
             image.save(f"./outputs/fallbackForWebserver/image_{imageCount}.jpeg","jpeg")
 
     models.sampleFromModel(modelOptions, data, updateText, saveCallback)
+    "Finish generating images"
