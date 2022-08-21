@@ -3,6 +3,7 @@ import argparse
 from torch import autocast
 from contextlib import nullcontext
 import sys
+import random
 
 @dataclass
 class ParsedConsoleArgValues:
@@ -50,7 +51,7 @@ defaultModelArgs = ModelArgValues(
     n_rows=0,
     scale=7.5,
     from_file=None,
-    seed=42,
+    seed=None,
     small_batch=False,
     precision="autocast",
     url="http://localhost:8080",
@@ -253,7 +254,7 @@ class ModelArguments:
                     n_rows = opt.n_rows,
                     scale = opt.scale,
                     from_file = opt.from_file,
-                    seed = opt.seed,
+                    seed = opt.seed if opt.seed else random.randint(1, 4294967294),
                     small_batch = opt.small_batch,
                     precision = opt.precision,
                     url = opt.url,

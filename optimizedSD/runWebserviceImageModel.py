@@ -94,7 +94,7 @@ while True:
     data = [modelOptions.n_samples * [modelOptions.prompt]]
 
     def updateText(i):
-        makeHttpRequest("POST", f"{modelOptions.url}/update/{pid}", body=f"seed: {modelOptions.seed}\nProgress: {i}/50")
+        makeHttpRequest("POST", f"{modelOptions.url}/update/{pid}", body=f"seed: {modelOptions.seed}\nProgress: {i}/{modelOptions.ddim_steps}")
 
     def saveCallback(image):
         temp = BytesIO()
