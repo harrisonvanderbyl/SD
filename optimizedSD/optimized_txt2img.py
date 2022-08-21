@@ -16,6 +16,7 @@ from contextlib import contextmanager, nullcontext
 from ldm.util import instantiate_from_config
 import base64
 import urllib3, json 
+from modelArguments import ModelArguments 
 http = urllib3.PoolManager()
 
 
@@ -32,144 +33,20 @@ def load_model_from_config(ckpt, verbose=False):
     sd = pl_sd["state_dict"]
     return sd
 
-config = "optimizedSD/v1-inference.yaml"
-ckpt = "models/ldm/stable-diffusion-v1/model.ckpt"
-device = "cuda"
+modelOptions = ModelArguments.parseFromConsoleArguments()
 
-parser = argparse.ArgumentParser()
-
-parser.add_argument(
-    "--prompt",
-    type=str,
-    nargs="?",
-    default="a painting of a virus monster playing guitar",
-    help="the prompt to render"
-)
-parser.add_argument(
-    "--outdir",
-    type=str,
-    nargs="?",
-    help="dir to write results to",
-    default="outputs/txt2img-samples"
-)
-parser.add_argument(
-    "--skip_grid",
-    action='store_true',
-    help="do not save a grid, only individual samples. Helpful when evaluating lots of samples",
-)
-parser.add_argument(
-    "--skip_save",
-    action='store_true',
-    help="do not save individual samples. For speed measurements.",
-)
-parser.add_argument(
-    "--ddim_steps",
-    type=int,
-    default=20,
-    help="number of ddim sampling steps",
-)
-
-parser.add_argument(
-    "--fixed_code",
-    action='store_true',
-    help="if enabled, uses the same starting code across samples ",
-)
-parser.add_argument(
-    "--ddim_eta",
-    type=float,
-    default=0.0,
-    help="ddim eta (eta=0.0 corresponds to deterministic sampling",
-)
-parser.add_argument(
-    "--n_iter",
-    type=int,
-    default=1,
-    help="sample this often",
-)
-parser.add_argument(
-    "--H",
-    type=int,
-    default=512,
-    help="image height, in pixel space",
-)
-parser.add_argument(
-    "--W",
-    type=int,
-    default=512,
-    help="image width, in pixel space",
-)
-parser.add_argument(
-    "--C",
-    type=int,
-    default=4,
-    help="latent channels",
-)
-parser.add_argument(
-    "--f",
-    type=int,
-    default=8,
-    help="downsampling factor",
-)
-parser.add_argument(
-    "--n_samples",
-    type=int,
-    default=1,
-    help="how many samples to produce for each given prompt. A.k.a. batch size",
-)
-parser.add_argument(
-    "--n_rows",
-    type=int,
-    default=0,
-    help="rows in the grid (default: n_samples)",
-)
-parser.add_argument(
-    "--scale",
-    type=float,
-    default=7.5,
-    help="unconditional guidance scale: eps = eps(x, empty) + scale * (eps(x, cond) - eps(x, empty))",
-)
-parser.add_argument(
-    "--from-file",
-    type=str,
-    help="if specified, load prompts from this file",
-)
-parser.add_argument(
-    "--seed",
-    type=int,
-    default=42,
-    help="the seed (for reproducible sampling)",
-)
-parser.add_argument(
-    "--small_batch",
-    action='store_true',
-    help="Reduce inference time when generate a smaller batch of images",
-)
-parser.add_argument(
-    "--precision",
-    type=str,
-    help="evaluate at this precision",
-    choices=["full", "autocast"],
-    default="autocast"
-)
-parser.add_argument(
-    "--url",
-    type=str,
-    help="url of associated writerbot instance",
-    default="http://localhost:8080"
-)
-opt = parser.parse_args()
 
 tic = time.time()
-os.makedirs(opt.outdir, exist_ok=True)
-outpath = opt.outdir
+os.makedirs(modelOptions.outdir, exist_ok=True)
+outpath = modelOptions.outdir
 
-sample_path = os.path.join(outpath, "samples", "_".join(opt.prompt.split())[:255])
+sample_path = os.path.join(outpath, "samples", "_".join(modelOptions.prompt.split())[:255])
 os.makedirs(sample_path, exist_ok=True)
 base_count = len(os.listdir(sample_path))
 grid_count = len(os.listdir(outpath)) - 1
-seed_everything(opt.seed)
+seed_everything(modelOptions.seed)
 
-sd = load_model_from_config(f"{ckpt}")
+sd = load_model_from_config(modelOptions.ckpt)
 li = []
 lo = []
 for key, value in sd.items():
@@ -188,9 +65,9 @@ for key in li:
 for key in lo:
     sd['model2.' + key[6:]] = sd.pop(key)
 
-config = OmegaConf.load(f"{config}")
+config = OmegaConf.load(f"{modelOptions.config}")
 
-if opt.small_batch:
+if modelOptions.small_batch:
     config.modelUNet.params.small_batch = True
 else:
     config.modelUNet.params.small_batch = False
@@ -209,20 +86,20 @@ modelFS = instantiate_from_config(config.modelFirstStage)
 _, _ = modelFS.load_state_dict(sd, strict=False)
 modelFS.eval()
 
-if opt.precision == "autocast":
+if modelOptions.precision == "autocast":
     model.half()
     modelCS.half()
 
 
 
-batch_size = opt.n_samples
-n_rows = opt.n_rows if opt.n_rows > 0 else batch_size
+batch_size = modelOptions.n_samples
+n_rows = modelOptions.n_rows if modelOptions.n_rows > 0 else batch_size
 
 while True:
     found = False
     prdata = {}
     while not found:
-        sdlist = http.request("GET","/sdlist") 
+        sdlist = http.request("GET",f"{modelOptions.url}/sdlist") 
         prdata = json.loads(sdlist.data.decode("utf-8"))
         print(prdata)
         print(sdlist.data.decode("utf-8"))
@@ -235,72 +112,72 @@ while True:
             found = True
 
 
-    opt.prompt = prdata["prompt"]
+    modelOptions.prompt = prdata["prompt"]
     pid = prdata["id"]
     if(float(prdata["seed"])<1.0):
         prdata["seed"] = prdata["seed"].replace(".","")
         
-    opt.ddim_steps = int(prdata["samples"])
-    config.modelUNet.params.ddim_steps = opt.ddim_steps
+    modelOptions.ddim_steps = int(prdata["samples"])
+    config.modelUNet.params.ddim_steps = modelOptions.ddim_steps
 
     seed_everything(int(prdata["seed"]))
 
     def updateText(i):
-        req = http.request("POST", opt.url+"/update/"+pid, body="seed:"+ prdata["seed"]+"\nProgress:"+str(i)+"/50", headers=headers)
+        req = http.request("POST", f"{modelOptions.url}/update/{pid}", body="seed:"+ prdata["seed"]+"\nProgress:"+str(i)+"/50", headers=headers)
    
 
-    start_code = torch.randn([opt.n_samples, opt.C, opt.H // opt.f, opt.W // opt.f], device=device)
+    start_code = torch.randn([modelOptions.n_samples, modelOptions.C, modelOptions.H // modelOptions.f, modelOptions.W // modelOptions.f], device=modelOptions.device)
 
     headers = {'content-type': 'text/plain'}
-    req = http.request("POST", opt.url+"/update/"+pid, body="starting with seed "+ prdata["seed"], headers=headers)
-    if not opt.from_file:
-        prompt = opt.prompt
+    req = http.request("POST", f"{modelOptions.url}/update/{pid}", body="starting with seed "+ prdata["seed"], headers=headers)
+    if not modelOptions.from_file:
+        prompt = modelOptions.prompt
         assert prompt is not None
         data = [batch_size * [prompt]]
 
     else:
-        print(f"reading prompts from {opt.from_file}")
-        with open(opt.from_file, "r") as f:
+        print(f"reading prompts from {modelOptions.from_file}")
+        with open(modelOptions.from_file, "r") as f:
             data = f.read().splitlines()
             data = list(chunk(data, batch_size))
 
-    precision_scope = autocast if opt.precision=="autocast" else nullcontext
+    precision_scope = autocast if modelOptions.precision=="autocast" else nullcontext
     with torch.no_grad():
 
         all_samples = list()
         # download prompt
         
-        for n in trange(opt.n_iter, desc="Sampling"):
+        for n in trange(modelOptions.n_iter, desc="Sampling"):
             for prompts in tqdm(data, desc="data"):
                 with precision_scope("cuda"):
-                    modelCS.to(device)
+                    modelCS.to(modelOptions.device)
                     uc = None
-                    if opt.scale != 1.0:
+                    if modelOptions.scale != 1.0:
                         uc = modelCS.get_learned_conditioning(batch_size * [""])
                     if isinstance(prompts, tuple):
                         prompts = list(prompts)
                     
                     c = modelCS.get_learned_conditioning(prompts)
-                    shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
+                    shape = [modelOptions.C, modelOptions.H // modelOptions.f, modelOptions.W // modelOptions.f]
                     mem = torch.cuda.memory_allocated()/1e6
                     modelCS.to("cpu")
                     while(torch.cuda.memory_allocated()/1e6 >= mem):
                         time.sleep(1)
 
 
-                    samples_ddim = model.sample(S=opt.ddim_steps,
+                    samples_ddim = model.sample(S=modelOptions.ddim_steps,
                                     conditioning=c,
-                                    batch_size=opt.n_samples,
+                                    batch_size=modelOptions.n_samples,
                                     shape=shape,
                                     verbose=False,
-                                    unconditional_guidance_scale=opt.scale,
+                                    unconditional_guidance_scale=modelOptions.scale,
                                     unconditional_conditioning=uc,
-                                    eta=opt.ddim_eta,
+                                    eta=modelOptions.ddim_eta,
                                     x_T=start_code,
                                     callback=updateText
                                     )
 
-                    modelFS.to(device)
+                    modelFS.to(modelOptions.device)
                     print("saving images")
                     for i in range(batch_size):
                         
@@ -311,13 +188,12 @@ while True:
                         image = Image.fromarray(x_sample.astype(np.uint8))
                         # send image using post request as base64
                         temp = BytesIO()
-                        url = opt.url+"/upload/"+pid
                         
                         image.save(temp,"jpeg")
                         encoded = base64.b64encode(temp.getvalue()).decode('utf-8')
                     
                         headers = {'content-type': 'text/plain'}
-                        req = http.request("POST", url, body=encoded, headers=headers)
+                        req = http.request("POST", f"{modelOptions.url}/upload/{pid}", body=encoded, headers=headers)
                         base_count += 1
 
 
@@ -330,20 +206,3 @@ while True:
                     #     all_samples.append(x_samples_ddim)
                     del samples_ddim
                     print("memory_final = ", torch.cuda.memory_allocated()/1e6)
-
-            # if not skip_grid:
-            #     # additionally, save as grid
-            #     grid = torch.stack(all_samples, 0)
-            #     grid = rearrange(grid, 'n b c h w -> (n b) c h w')
-            #     grid = make_grid(grid, nrow=n_rows)
-
-            #     # to image
-            #     grid = 255. * rearrange(grid, 'c h w -> h w c').cpu().numpy()
-            #     Image.fromarray(grid.astype(np.uint8)).save(os.path.join(outpath, f'grid-{grid_count:04}.png'))
-            #     grid_count += 1
-
-toc = time.time()
-
-time_taken = (toc-tic)/60.0
-
-print(("Your samples are ready in {0:.2f} minutes and waiting for you here \n" + sample_path).format(time_taken))
