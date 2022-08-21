@@ -21,10 +21,6 @@ def makeHttpRequest(type, url, body = None):
         print(e)
         return REQUEST_FAILED
 
-def chunk(it, size):
-    it = iter(it)
-    return iter(lambda: tuple(islice(it, size)), ())
-
 initialModelOptions = ModelArguments.parseFromConsoleArguments()
 
 seed_everything(initialModelOptions.seed)
@@ -98,7 +94,6 @@ while True:
     data = [modelOptions.n_samples * [modelOptions.prompt]]
 
     def updateText(i):
-        #Where is this 50 from?
         makeHttpRequest("POST", f"{modelOptions.url}/update/{pid}", body=f"seed: {modelOptions.seed}\nProgress: {i}/50")
 
     def saveCallback(image):

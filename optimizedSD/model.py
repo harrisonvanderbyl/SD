@@ -6,6 +6,7 @@ import time
 from tqdm import tqdm, trange
 from einops import rearrange
 from PIL import Image
+import numpy as np
 
 def load_state_dictionary_from_config(ckptFilePath):
     print(f"Loading model from {ckptFilePath}")
@@ -39,6 +40,7 @@ class Model:
         self.config = OmegaConf.load(f"{modelOptions.config}")
 
         self.config.modelUNet.params.small_batch = modelOptions.small_batch
+        self.config.modelUNet.params.ddim_steps = modelOptions.ddim_steps
 
         self.model = instantiate_from_config(self.config.modelUNet)
         self.model.load_state_dict(stateDictionary, strict=False)

@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import argparse
 from torch import autocast
 from contextlib import nullcontext
+import sys
 
 @dataclass
 class ParsedConsoleArgValues:
@@ -103,6 +104,12 @@ class ModelArguments:
 
     @classmethod
     def parseFromConsoleArguments(cls):
+        args = sys.argv
+        args.pop(0)
+        return cls.parseArguments(args)
+
+    @classmethod
+    def parseArguments(cls, argList):
         parser = argparse.ArgumentParser()
 
         parser.add_argument(
@@ -228,7 +235,7 @@ class ModelArguments:
             help="url of associated writerbot instance",
             default=cls.defaultModelArgs.url,
         )
-        opt = parser.parse_args()
+        opt = parser.parse_args(argList)
         return cls(ModelArgValues(
                     prompt = opt.prompt,
                     outdir = opt.outdir,
