@@ -246,7 +246,7 @@ while True:
     seed_everything(int(prdata["seed"]))
 
     def updateText(i):
-        req = http.request("POST", opt.url+"/update/"+pid, body="seed:"+ prdata["seed"]+"\nProgress:"+str(i)+"/50", headers=headers)
+        req = http.request("POST", opt.url+"/update/"+pid, body="Generating: "+str(i)+"/50", headers=headers)
    
 
     start_code = torch.randn([opt.n_samples, opt.C, opt.H // opt.f, opt.W // opt.f], device=device)
