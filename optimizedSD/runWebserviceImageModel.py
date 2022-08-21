@@ -81,7 +81,7 @@ while True:
             time.sleep(DEFAULT_SERVER_REQUEST_DELAY)
         else:
             print(f"Using prompt:{serverResponse['prompt']}")
-            fetchedNewPrompttempFromServer = True
+            fetchedNewPromptFromServer = True
 
     pid = serverResponse["id"]
     modelOptions = parseModelOptionsFromServerResponse(serverResponse)
@@ -94,7 +94,7 @@ while True:
     data = [modelOptions.n_samples * [modelOptions.prompt]]
 
     def updateText(i):
-        makeHttpRequest("POST", f"{modelOptions.url}/update/{pid}", body=f"seed: {modelOptions.seed}\nProgress: {i}/{modelOptions.ddim_steps}")
+        makeHttpRequest("POST", f"{modelOptions.url}/update/{pid}", body=f"Progress: {i}/{modelOptions.ddim_steps}")
 
     def saveCallback(image):
         temp = BytesIO()
