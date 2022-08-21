@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 import argparse
+from torch import autocast
+from contextlib import nullcontext
 
 @dataclass
 class ParsedConsoleArgValues:
@@ -63,7 +65,7 @@ class ModelArguments:
     def setDefaultValues(cls, modelArguments: ModelArgValues):
         cls.defaultModelArgs = modelArguments
 
-    def __init__(self, modelArguments: ParsedConsoleArgValues):
+    def __init__(self, modelArguments: ModelArgValues):
         # Probably can do this better, whatever
         self.prompt = modelArguments.prompt
         self.outdir = modelArguments.outdir
@@ -85,9 +87,19 @@ class ModelArguments:
         self.small_batch = modelArguments.small_batch
         self.precision = modelArguments.precision
         self.url = modelArguments.url
-        self.config = self.defaultModelArgs.config
-        self.ckpt = self.defaultModelArgs.ckpt
-        self.device = self.defaultModelArgs.device
+        self.config = modelArguments.config
+        self.ckpt = modelArguments.ckpt
+        self.device = modelArguments.device
+
+    def getShape(self):
+        return [self.C, self.H // self.f, self.W // self.f]
+
+    def getTorchShape(self):
+        return [self.n_samples, *self.getShape()]
+
+    @property
+    def precision_scope(self):
+        return autocast if self.precision=="autocast" else nullcontext
 
     @classmethod
     def parseFromConsoleArguments(cls):
@@ -217,4 +229,28 @@ class ModelArguments:
             default=cls.defaultModelArgs.url,
         )
         opt = parser.parse_args()
-        return cls(opt)
+        return cls(ModelArgValues(
+                    prompt = opt.prompt,
+                    outdir = opt.outdir,
+                    skip_grid = opt.skip_grid,
+                    skip_save = opt.skip_save,
+                    ddim_steps = opt.ddim_steps,
+                    fixed_code = opt.fixed_code,
+                    ddim_eta = opt.ddim_eta,
+                    n_iter = opt.n_iter,
+                    H = opt.H,
+                    W = opt.W,
+                    C = opt.C,
+                    f = opt.f,
+                    n_samples = opt.n_samples,
+                    n_rows = opt.n_rows,
+                    scale = opt.scale,
+                    from_file = opt.from_file,
+                    seed = opt.seed,
+                    small_batch = opt.small_batch,
+                    precision = opt.precision,
+                    url = opt.url,
+                    config = cls.defaultModelArgs.config,
+                    ckpt = cls.defaultModelArgs.ckpt,
+                    device = cls.defaultModelArgs.device
+        ))
