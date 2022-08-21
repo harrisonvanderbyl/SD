@@ -65,7 +65,7 @@ def parseModelOptionsFromServerResponse(serverResponse: dict) -> ModelArguments:
         ckpt = initialModelOptions.ckpt,
         device = initialModelOptions.device
     ))
-
+print("model loaded")
 while True:
     print("atarting listen")
     fetchedNewPromptFromServer = False
