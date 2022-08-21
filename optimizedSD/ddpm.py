@@ -499,6 +499,7 @@ class UNet(DDPM):
         print(f"Running PLMS Sampling with {total_steps} timesteps")
 
         iterator = tqdm(time_range, desc='PLMS Sampler', total=total_steps)
+        
         old_eps = []
 
         for i, step in enumerate(iterator):
