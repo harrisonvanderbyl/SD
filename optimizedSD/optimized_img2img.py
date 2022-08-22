@@ -314,22 +314,10 @@ with torch.no_grad():
                 while(torch.cuda.memory_allocated()/1e6 >= mem):
                     time.sleep(1)
 
-                # if not opt.skip_grid:
-                #     all_samples.append(x_samples_ddim)
                 del samples_ddim
                 print("memory_final = ", torch.cuda.memory_allocated()/1e6)
 
-        # if not skip_grid:
-        #     # additionally, save as grid
-        #     grid = torch.stack(all_samples, 0)
-        #     grid = rearrange(grid, 'n b c h w -> (n b) c h w')
-        #     grid = make_grid(grid, nrow=n_rows)
-
-        #     # to image
-        #     grid = 255. * rearrange(grid, 'c h w -> h w c').cpu().numpy()
-        #     Image.fromarray(grid.astype(np.uint8)).save(os.path.join(outpath, f'grid-{grid_count:04}.png'))
-        #     grid_count += 1
-
+ 
 toc = time.time()
 
 time_taken = (toc-tic)/60.0

@@ -27,6 +27,7 @@ class ParsedConsoleArgValues:
     small_batch: bool
     precision: str
     url: str
+    inputimg: str
 
 @dataclass
 class ModelArgValues(ParsedConsoleArgValues):
@@ -57,7 +58,8 @@ defaultModelArgs = ModelArgValues(
     url="http://localhost:8080",
     config = "optimizedSD/v1-inference.yaml",
     ckpt = "models/ldm/stable-diffusion-v1/model.ckpt",
-    device = "cuda"
+    device = "cuda",
+    inputimg=None
 )
 
 class ModelArguments:
@@ -92,6 +94,7 @@ class ModelArguments:
         self.config = modelArguments.config
         self.ckpt = modelArguments.ckpt
         self.device = modelArguments.device
+        self.inputimg = modelArguments.inputimg
 
     def getShape(self):
         return [self.C, self.H // self.f, self.W // self.f]
@@ -236,6 +239,13 @@ class ModelArguments:
             help="url of associated writerbot instance",
             default=cls.defaultModelArgs.url,
         )
+        parser.add_argument(
+            "--inputimg",
+            type=str,
+            help="input image to render",
+            default=cls.defaultModelArgs.inputimg,
+        )
+
         opt = parser.parse_args(argList)
         return cls(ModelArgValues(
                     prompt = opt.prompt,
@@ -260,5 +270,6 @@ class ModelArguments:
                     url = opt.url,
                     config = cls.defaultModelArgs.config,
                     ckpt = cls.defaultModelArgs.ckpt,
-                    device = cls.defaultModelArgs.device
+                    device = cls.defaultModelArgs.device,
+                    inputimg = opt.inputimg
         ))

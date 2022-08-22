@@ -1,3 +1,4 @@
+from io import BytesIO
 import torch
 from omegaconf import OmegaConf
 from ldm.util import instantiate_from_config
@@ -7,6 +8,26 @@ from tqdm import tqdm, trange
 from einops import rearrange
 from PIL import Image
 import numpy as np
+import base64
+def load_img(base64text, h0, w0):
+    temp = BytesIO()
+    
+    temp.write(base64.b64decode(base64text))
+    
+    image = Image.open(temp,"r",["jpeg"]).convert("RGB")
+    w, h = image.size
+   
+    if(h0 is not None and w0 is not None):
+        h, w = h0, w0
+    
+    w, h = map(lambda x: x - x % 32, (w0, h0))  # resize to integer multiple of 32
+
+    print(f"New image size ({w}, {h})")
+    image = image.resize((w, h), resample = Image.LANCZOS)
+    image = np.array(image).astype(np.float32) / 255.0
+    image = image[None].transpose(0, 3, 1, 2)
+    image = torch.from_numpy(image)
+    return 2.*image - 1.
 
 def load_state_dictionary_from_config(ckptFilePath):
     print(f"Loading model from {ckptFilePath}")
@@ -57,8 +78,20 @@ class Model:
         if modelOptions.precision == "autocast":
             self.model.half()
             self.modelCS.half()
-
-    def sampleFromModel(self, modelOptions, data, updateCallback, saveCallback):
+            self.modelFS.half()
+    
+    def sampleFromModel(self, modelOptions, data, updateCallback, saveCallback, inputimg=None, inputimgstrength=None):
+        if(inputimg is not None):
+         self.modelFS.to(modelOptions.device)
+         init_image = load_img(inputimg, modelOptions.H, modelOptions.W).to("cuda")
+         if modelOptions.precision == "autocast":
+            init_image = init_image.half()
+         init_latent = self.modelFS.get_first_stage_encoding(self.modelFS.encode_first_stage(init_image))  # move to latent space
+         self.modelFS.to("cpu")
+         if(inputimgstrength is not None):
+            t_enc = int(float(inputimgstrength) * modelOptions.ddim_steps)
+         else:
+            t_enc = int(0.5 * modelOptions.ddim_steps)
         start_code = torch.randn(modelOptions.getTorchShape(), device=modelOptions.device)
         with torch.no_grad():
             for n in trange(modelOptions.n_iter, desc="Sampling"):
@@ -78,8 +111,8 @@ class Model:
                         while(torch.cuda.memory_allocated()/1e6 >= mem):
                             time.sleep(1)
 
-
-                        samples_ddim = self.model.sample(S=modelOptions.ddim_steps,
+                        if(inputimg is None):
+                            samples_ddim = self.model.sample(S=modelOptions.ddim_steps,
                                         conditioning=c,
                                         batch_size=modelOptions.n_samples,
                                         shape=shape,
@@ -90,7 +123,12 @@ class Model:
                                         x_T=start_code,
                                         callback=updateCallback
                                         )
-
+                        # encode (scaled latent)
+                        else:
+                            z_enc = self.model.stochastic_encode(init_latent, torch.tensor([t_enc]*1).to(modelOptions.device))
+                        # decode it
+                            samples_ddim = self.model.decode(z_enc, c, t_enc, unconditional_guidance_scale=modelOptions.scale,
+                                                    unconditional_conditioning=uc,)
                         self.modelFS.to(modelOptions.device)
                         print("saving images")
                         for i in range(modelOptions.n_samples):
