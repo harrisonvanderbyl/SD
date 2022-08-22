@@ -80,7 +80,7 @@ class Model:
             self.modelCS.half()
             self.modelFS.half()
     
-    def sampleFromModel(self, modelOptions, data, updateCallback, saveCallback, inputimg=None, inputimgstrength=None):
+    def sampleFromModel(self, modelOptions, data, updateCallback, saveCallback, inputimg=None, inputimgstrength:str=None):
         if(inputimg is not None):
             print(f"Loading image from {len(inputimg)} chars and {len(inputimgstrength)} strength")
             self.modelFS.to(modelOptions.device)
@@ -89,10 +89,11 @@ class Model:
                 init_image = init_image.half()
             init_latent = self.modelFS.get_first_stage_encoding(self.modelFS.encode_first_stage(init_image))  # move to latent space
             self.modelFS.to("cpu")
-            if(inputimgstrength is not None):
+            
+            if(inputimgstrength is not None and inputimgstrength.isnumeric()):
                 t_enc = int(float(inputimgstrength) * 50)
             else:
-                t_enc = int(0.9 * modelOptions.ddim_steps)
+                t_enc = int(45)
         else:
             start_code = torch.randn(modelOptions.getTorchShape(), device=modelOptions.device)
         with torch.no_grad():
