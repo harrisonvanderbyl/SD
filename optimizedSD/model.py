@@ -90,7 +90,7 @@ class Model:
             init_latent = self.modelFS.get_first_stage_encoding(self.modelFS.encode_first_stage(init_image))  # move to latent space
             self.modelFS.to("cpu")
             
-            if(inputimgstrength is not None and inputimgstrength.isnumeric()):
+            if(inputimgstrength is not None):
                 t_enc = int(float(inputimgstrength) * 50)
             else:
                 t_enc = int(45)
