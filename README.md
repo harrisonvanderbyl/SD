@@ -1,12 +1,6 @@
-# DECENTRALISED DISCORD BOT, KINDA BROKEN, DOES WORK
-
-Combine with https://github.com/harrisonvanderbyl/ravenbot-ai
-
-Pull requests appreciated.
-
 # UPDATE
 
-The code can now use mixed precision to generate _512x512 images under 25 seconds per image while using less than 4Gb VRAM (Tested on RTX 2060 which has tensor cores). And with 6Gb VRAM, it can generate upto 640x704 images._ Thanks to @xraxra for the suggestion
+This code can now generate a 512x512 image from prior images using less than 4Gb of RAM (in less than 20 seconds on RTX 2060)
 
 # Optimized Stable Diffusion (Sort of)
 
@@ -16,11 +10,11 @@ The code can now use mixed precision to generate _512x512 images under 25 second
 
 - If you get a CUDA out of memory error, try reducing the batch size `--n_samples`. If it doesn't work, the other option is to reduce the image width `--W` or height `--H` or both.
 
-- Mixed Precision is enabled by default. If you don't have a GPU with tensor cores, you can still use mixed precision to run the code using lesser VRAM but the inference time may be larger. And if you feel that the inference is slower, try using the `--precision full` argument to disable it. On RTX 2060, using full precision can generate 512x512 images in 40 second per image while using less than 5Gb VRAM. And with 6Gb VRAM, it can generate upto 708x512 images.
+## txt2img
 
-- All the modified files are in the [optimizedSD](optimizedSD) folder, so if you have already cloned the original repo, you can just download and copy this folder into the orignal repo instead of cloning the entire repo.
+- It can generate _512x512 images from a prompt on a 4Gb VRAM GPU in under 25 seconds per image_ (RTX 2060 in my case).
 
-- You can also clone this repo and follow the same installation steps as the original written below (mainly creating the conda env and placing the weights at the specified location).
+- You can use the `--H` & `--W` arguments to set the size of the generated image.
 
 - For example, the following command will generate 20 512x512 images:
 
@@ -55,7 +49,7 @@ optional arguments:
 
 - To achieve this, the stable diffusion model is fragmented into four parts which are sent to the GPU only when needed. After the calculation is done, they are moved back to the CPU. This allows us to run a bigger model on a lower VRAM.
 
-- The only drawback is higher inference time (40 seconds per image for 50 ddim_steps on a 6Gb RTX 2060) which is still an order of magnitude faster than inference on CPU.
+- The only drawback is higher inference time which is still an order of magnitude faster than inference on CPU.
 
 # Stable Diffusion
 
