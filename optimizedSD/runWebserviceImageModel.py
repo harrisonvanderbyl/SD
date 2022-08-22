@@ -90,10 +90,12 @@ while True:
     pid = serverResponse["id"]
     modelOptions = parseModelOptionsFromServerResponse(serverResponse)
     inputimg = None
-    if "inputimg" in serverResponse:
+    if "input" in serverResponse:
+        print("inputimg found")
         inputimg = serverResponse["input"]
     strength = "0.5"
     if "strength" in serverResponse:
+        print("strength found")
         strength = serverResponse["strength"]
     models.config.modelUNet.params.ddim_steps = modelOptions.ddim_steps
     seed_everything(modelOptions.seed)

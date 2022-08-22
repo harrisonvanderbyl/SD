@@ -82,17 +82,19 @@ class Model:
     
     def sampleFromModel(self, modelOptions, data, updateCallback, saveCallback, inputimg=None, inputimgstrength=None):
         if(inputimg is not None):
-         self.modelFS.to(modelOptions.device)
-         init_image = load_img(inputimg, modelOptions.H, modelOptions.W).to("cuda")
-         if modelOptions.precision == "autocast":
-            init_image = init_image.half()
-         init_latent = self.modelFS.get_first_stage_encoding(self.modelFS.encode_first_stage(init_image))  # move to latent space
-         self.modelFS.to("cpu")
-         if(inputimgstrength is not None):
-            t_enc = int(float(inputimgstrength) * modelOptions.ddim_steps)
-         else:
-            t_enc = int(0.5 * modelOptions.ddim_steps)
-        start_code = torch.randn(modelOptions.getTorchShape(), device=modelOptions.device)
+            print(f"Loading image from {len(inputimg)} chars and {len(inputimgstrength)} strength")
+            self.modelFS.to(modelOptions.device)
+            init_image = load_img(inputimg, modelOptions.H, modelOptions.W).to("cuda")
+            if modelOptions.precision == "autocast":
+                init_image = init_image.half()
+            init_latent = self.modelFS.get_first_stage_encoding(self.modelFS.encode_first_stage(init_image))  # move to latent space
+            self.modelFS.to("cpu")
+            if(inputimgstrength is not None):
+                t_enc = int(float(inputimgstrength) * modelOptions.ddim_steps)
+            else:
+                t_enc = int(0.9 * modelOptions.ddim_steps)
+        else:
+            start_code = torch.randn(modelOptions.getTorchShape(), device=modelOptions.device)
         with torch.no_grad():
             for n in trange(modelOptions.n_iter, desc="Sampling"):
                 for prompts in tqdm(data, desc="data"):
