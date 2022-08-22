@@ -38,6 +38,7 @@ def parseModelOptionsFromServerResponse(serverResponse: dict) -> ModelArguments:
     seed = int(seed)    
     
     ddim_steps = int(serverResponse["samples"])
+
     
     return ModelArguments(
         ModelArgValues(
@@ -63,7 +64,9 @@ def parseModelOptionsFromServerResponse(serverResponse: dict) -> ModelArguments:
         url = initialModelOptions.url,
         config = initialModelOptions.config,
         ckpt = initialModelOptions.ckpt,
-        device = initialModelOptions.device
+        device = initialModelOptions.device,
+        inputimg = initialModelOptions.inputimg,
+        
     ))
 print("model loaded")
 while True:
@@ -86,8 +89,12 @@ while True:
 
     pid = serverResponse["id"]
     modelOptions = parseModelOptionsFromServerResponse(serverResponse)
-
-    
+    inputimg = None
+    if "inputimg" in serverResponse:
+        inputimg = serverResponse["input"]
+    strength = "0.5"
+    if "strength" in serverResponse:
+        strength = serverResponse["strength"]
     models.config.modelUNet.params.ddim_steps = modelOptions.ddim_steps
     seed_everything(modelOptions.seed)
 
@@ -106,5 +113,5 @@ while True:
             imageCount = len(os.listdir("./outputs/fallbackForWebserver/"))
             image.save(f"./outputs/fallbackForWebserver/image_{imageCount}.jpeg","jpeg")
 
-    models.sampleFromModel(modelOptions, data, updateText, saveCallback)
+    models.sampleFromModel(modelOptions, data, updateText, saveCallback,inputimg,strength)
     "Finish generating images"
